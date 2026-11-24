@@ -32,6 +32,10 @@ jobs:
           EOF
           cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application' }
+          dependencies {
+              implementation 'androidx.room:room-runtime:2.6.1'
+              annotationProcessor 'androidx.room:room-compiler:2.6.1'
+          }
           android {
               namespace 'id.pakdesurya.pos'
               compileSdk 35
@@ -39,8 +43,8 @@ jobs:
                   applicationId 'id.pakdesurya.pos'
                   minSdk 23
                   targetSdk 32
-                  versionCode 30
-                  versionName '3.0.0'
+                  versionCode 31
+                  versionName '3.1.0'
               }
           }
           EOF
@@ -108,9 +112,10 @@ jobs:
           <nav class="nav"><button class="active" data-page="home" onclick="go('home')"><i>⌂</i>Home</button><button data-page="cashier" onclick="go('cashier')"><i>▦</i>Kasir</button><button data-page="products" onclick="go('products')"><i>◈</i>Produk</button><button data-page="history" onclick="go('history')"><i>▤</i>Transaksi</button></nav></div><div id="modal"></div>
           <script>
           const money=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
-          let products=JSON.parse(localStorage.getItem('pds_products')||'null')||[{id:1,name:'Mie Jebew Asin',price:10000,kind:'yellow'},{id:2,name:'Mie Jebew Manis',price:10000,kind:'brown'}];
-          let sales=JSON.parse(localStorage.getItem('pds_sales')||'[]'),cart={};
-          function persist(){localStorage.setItem('pds_products',JSON.stringify(products));localStorage.setItem('pds_sales',JSON.stringify(sales))}
+          function loadStore(k){let v=Android.getData(k);if(v===null||v===undefined){v=localStorage.getItem(k);if(v!==null)Android.saveData(k,v)}return v}
+          let products=JSON.parse(loadStore('pds_products')||'null')||[{id:1,name:'Mie Jebew Asin',price:10000,kind:'yellow'},{id:2,name:'Mie Jebew Manis',price:10000,kind:'brown'}];
+          let sales=JSON.parse(loadStore('pds_sales')||'[]'),cart={};
+          function persist(){let p=JSON.stringify(products),s=JSON.stringify(sales);Android.saveData('pds_products',p);Android.saveData('pds_sales',s);localStorage.setItem('pds_products',p);localStorage.setItem('pds_sales',s)}
           function today(s){return new Date(s).toDateString()===new Date().toDateString()}
           function rupiah(n){return money(n)}
           function go(page){document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));document.getElementById('greet').textContent=({home:'Dashboard',cashier:'Kasir',products:'Produk',history:'Transaksi'}[page]||page);({home:home,cashier:cashier,products:productPage,history:history}[page]||home)()}
@@ -140,6 +145,35 @@ jobs:
           go('home');
           </script></body></html>
           HTML
+          cat > app/src/main/java/id/pakdesurya/pos/StoreEntry.java <<'JAVA'
+          package id.pakdesurya.pos;
+          import androidx.annotation.NonNull;
+          import androidx.room.Entity;
+          import androidx.room.PrimaryKey;
+          @Entity(tableName="app_store") public class StoreEntry {
+            @PrimaryKey @NonNull public String key;
+            @NonNull public String value;
+            public StoreEntry(@NonNull String key,@NonNull String value){this.key=key;this.value=value;}
+          }
+          JAVA
+          cat > app/src/main/java/id/pakdesurya/pos/StoreDao.java <<'JAVA'
+          package id.pakdesurya.pos;
+          import androidx.room.Dao;
+          import androidx.room.Insert;
+          import androidx.room.OnConflictStrategy;
+          import androidx.room.Query;
+          @Dao public interface StoreDao {
+            @Query("SELECT value FROM app_store WHERE key=:key LIMIT 1") String get(String key);
+            @Insert(onConflict=OnConflictStrategy.REPLACE) void put(StoreEntry entry);
+          }
+          JAVA
+          cat > app/src/main/java/id/pakdesurya/pos/AppDatabase.java <<'JAVA'
+          package id.pakdesurya.pos;
+          import androidx.room.Database;
+          import androidx.room.RoomDatabase;
+          @Database(entities={StoreEntry.class},version=1,exportSchema=false)
+          public abstract class AppDatabase extends RoomDatabase { public abstract StoreDao storeDao(); }
+          JAVA
           cat > app/src/main/java/id/pakdesurya/pos/MainActivity.java <<'JAVA'
           package id.pakdesurya.pos;
           import android.app.*;
@@ -149,17 +183,21 @@ jobs:
           import android.widget.Toast;
           import android.bluetooth.*;
           import android.content.pm.PackageManager;
+          import androidx.room.Room;
           import java.io.*;
           import java.util.UUID;
           
           public class MainActivity extends Activity {
             WebView web;
+            AppDatabase database;
             BluetoothAdapter adapter;
             BluetoothSocket socket;
             final String MAC="86:67:7A:CF:48:AE";
             final UUID SPP=UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-            public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(0xFF38251C);getWindow().setNavigationBarColor(0xFF38251C);adapter=BluetoothAdapter.getDefaultAdapter();web=new WebView(this);web.setBackgroundColor(0xFFFFF8ED);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.addJavascriptInterface(new Bridge(),"Android");setContentView(web);web.loadUrl("file:///android_asset/index.html");}
+            public void onCreate(Bundle b){super.onCreate(b);database=Room.databaseBuilder(getApplicationContext(),AppDatabase.class,"pakdesurya-pos.db").allowMainThreadQueries().build();getWindow().setStatusBarColor(0xFF38251C);getWindow().setNavigationBarColor(0xFF38251C);adapter=BluetoothAdapter.getDefaultAdapter();web=new WebView(this);web.setBackgroundColor(0xFFFFF8ED);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.addJavascriptInterface(new Bridge(),"Android");setContentView(web);web.loadUrl("file:///android_asset/index.html");}
             class Bridge {
+              @JavascriptInterface public String getData(String key){try{return database.storeDao().get(key);}catch(Exception e){return null;}}
+              @JavascriptInterface public void saveData(String key,String value){try{database.storeDao().put(new StoreEntry(key,value));}catch(Exception e){runOnUiThread(()->Toast.makeText(MainActivity.this,"Gagal menyimpan data lokal",Toast.LENGTH_LONG).show());}}
               @JavascriptInterface public void printReceipt(String data){runOnUiThread(()->print(data));}
               @JavascriptInterface public void toast(String s){runOnUiThread(()->Toast.makeText(MainActivity.this,s,Toast.LENGTH_LONG).show());}
               @JavascriptInterface public String appVersion(){return "3.2-preview";}
@@ -177,5 +215,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: POS-MieAyam-Android-v3.0
+          name: POS-MieAyam-Android-v3.1
           path: app/build/outputs/apk/debug/*.apk
