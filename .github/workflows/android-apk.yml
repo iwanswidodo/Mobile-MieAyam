@@ -1,0 +1,142 @@
+name: Build POS MieAyam Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Generate Android project
+        shell: bash
+        run: |
+          mkdir -p app/src/main/java/id/pakdesurya/pos app/src/main/res/drawable
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "POS-MieAyam"
+          include ':app'
+          EOF
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' apply false }
+          EOF
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'id.pakdesurya.pos'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'id.pakdesurya.pos'
+                  minSdk 23
+                  targetSdk 32
+                  versionCode 30
+                  versionName '3.0.0'
+              }
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="POS Mie Ayam" android:usesCleartextTraffic="false">
+              <activity android:name=".MainActivity" android:exported="true">
+                <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+          cat > app/src/main/java/id/pakdesurya/pos/MainActivity.java <<'EOF'
+          package id.pakdesurya.pos;
+          import android.app.*;
+          import android.os.*;
+          import android.content.*;
+          import android.graphics.Typeface;
+          import android.graphics.Color;
+          import android.view.*;
+          import android.widget.*;
+          import org.json.*;
+          import java.text.*;
+          import java.util.*;
+          import java.io.*;
+          import java.nio.charset.Charset;
+          import android.bluetooth.*;
+          import android.content.pm.PackageManager;
+          import java.util.UUID;
+
+          public class MainActivity extends Activity {
+            final int BROWN=Color.rgb(83,53,36), CREAM=Color.rgb(250,245,235), GOLD=Color.rgb(190,145,73), INK=Color.rgb(54,42,34);
+            final String MAC="86:67:7A:CF:48:AE";
+            final UUID SPP=UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+            android.content.SharedPreferences db;
+            LinearLayout root, products, cartRows;
+            TextView cartTotal, syncLabel;
+            int qtyAsin=0, qtyManis=0;
+            BluetoothAdapter bluetooth;
+            BluetoothSocket socket;
+            boolean busy=false;
+            public void onCreate(Bundle b){super.onCreate(b);db=getSharedPreferences("pos_mie_ayam",0);bluetooth=BluetoothAdapter.getDefaultAdapter();showHome();}
+            int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+            TextView text(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
+            LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
+            LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
+            void pad(View v,int a){v.setPadding(dp(a),dp(a),dp(a),dp(a));}
+            GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
+            void base(String title){root=column();root.setBackgroundColor(CREAM);ScrollView sc=new ScrollView(this);sc.addView(root);setContentView(sc);
+              LinearLayout header=column();header.setBackground(bg(BROWN,0));pad(header,20);
+              header.addView(text("PAK DE SURYA",23,Color.WHITE,true));header.addView(text("MIE AYAM • POS KASIR",11,0xFFEAD9B8,true));
+              header.addView(text(title,18,Color.WHITE,true));root.addView(header);}
+            void showHome(){base("Dashboard");LinearLayout summary=row();pad(summary,16);summary.setBackground(bg(Color.WHITE,16));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.setMargins(dp(16),dp(16),dp(16),dp(8));root.addView(summary,sp);
+              summary.addView(metric("OMZET HARI INI","Rp "+todayRevenue()));summary.addView(metric("TRANSAKSI",String.valueOf(todayCount())));
+              LinearLayout shortcuts=column();pad(shortcuts,16);root.addView(shortcuts);shortcuts.addView(text("Menu utama",18,BROWN,true));
+              Button kasir=btn("BUKA KASIR");shortcuts.addView(kasir);kasir.setOnClickListener(v->showCashier());
+              Button history=btn("RIWAYAT TRANSAKSI");shortcuts.addView(history);history.setOnClickListener(v->showHistory());
+              Button sync=btn("STATUS SINKRONISASI");shortcuts.addView(sync);sync.setOnClickListener(v->showSync());
+              LinearLayout status=column();pad(status,16);status.setBackground(bg(Color.WHITE,16));root.addView(status,new LinearLayout.LayoutParams(-1,-2));status.addView(text("PRINTER BLUETOOTH",14,BROWN,true));status.addView(text("Rongta RPP02N • SPP",13,INK,false));status.addView(text("Transaksi tersimpan lokal saat offline",12,0xFF68735B,false));
+            }
+            View metric(String label,String value){LinearLayout c=column();c.addView(text(label,10,0xFF88796C,true));c.addView(text(value,20,BROWN,true));return c;}
+            Button btn(String label){Button b=new Button(this);b.setText(label);b.setTextColor(Color.WHITE);b.setBackground(bg(BROWN,12));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,dp(8),0,dp(8));b.setLayoutParams(p);return b;}
+            void showCashier(){base("Kasir Offline");LinearLayout body=column();pad(body,16);root.addView(body);body.addView(text("Pilih menu",19,BROWN,true));
+              product(body,"MIE JEBEW ASIN","Kuning • Rp10.000",0);product(body,"MIE JEBEW MANIS","Cokelat • Rp10.000",1);
+              body.addView(text("Keranjang",18,BROWN,true));cartRows=column();body.addView(cartRows);cartTotal=text("Total: Rp 0",20,BROWN,true);body.addView(cartTotal);
+              Button checkout=btn("LANJUT PEMBAYARAN");body.addView(checkout);checkout.setOnClickListener(v->checkout());
+              Button back=btn("KEMBALI");body.addView(back);back.setOnClickListener(v->showHome());refreshCart();}
+            void product(LinearLayout body,String name,String desc,int id){LinearLayout card=column();pad(card,14);card.setBackground(bg(Color.WHITE,14));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,dp(10),0,dp(4));body.addView(card,p);card.addView(text(name,16,BROWN,true));card.addView(text(desc,13,INK,false));Button add=btn("+ TAMBAH");card.addView(add);add.setOnClickListener(v->{if(id==0)qtyAsin++;else qtyManis++;refreshCart();});}
+            void refreshCart(){if(cartRows==null)return;cartRows.removeAllViews();if(qtyAsin>0)cartRows.addView(text("Jebew Asin × "+qtyAsin+"  Rp "+(qtyAsin*10000),14,INK,false));if(qtyManis>0)cartRows.addView(text("Jebew Manis × "+qtyManis+"  Rp "+(qtyManis*10000),14,INK,false));cartTotal.setText("Total: Rp "+money(total()));}
+            int total(){return (qtyAsin+qtyManis)*10000;}
+            String money(int n){return String.format(Locale.US("%,d",n).replace(',','.'));}
+            void checkout(){if(total()==0){new AlertDialog.Builder(this).setMessage("Keranjang masih kosong").setPositiveButton("OK",null).show();return;}
+              String[] methods={"Tunai","QRIS","Transfer"};new AlertDialog.Builder(this).setTitle("Pilih pembayaran").setItems(methods,(d,w)->saveSale(methods[w]));}
+            void saveSale(String method){try{JSONArray a=new JSONArray(db.getString("sales","[]"));JSONObject o=new JSONObject();String id=UUID.randomUUID().toString();o.put("id",id);o.put("date",System.currentTimeMillis());o.put("asin",qtyAsin);o.put("manis",qtyManis);o.put("total",total());o.put("payment",method);o.put("sync","PENDING");a.put(o);db.edit().putString("sales",a.toString()).apply();String receipt=receipt(o);qtyAsin=0;qtyManis=0;showSuccess(receipt);}catch(Exception e){toast("Gagal menyimpan transaksi");}}
+            String receipt(JSONObject o)throws Exception{return "PAK DE SURYA\nMIE AYAM\n------------------------------\nJebew Asin x"+o.optInt("asin")+"\nJebew Manis x"+o.optInt("manis")+"\n------------------------------\nTOTAL Rp "+money(o.optInt("total"))+"\nBayar: "+o.optString("payment")+"\nTerima kasih!\n";}
+            void showSuccess(String receipt){new AlertDialog.Builder(this).setTitle("Transaksi tersimpan").setMessage("Transaksi berhasil disimpan di perangkat.\n\n"+receipt).setPositiveButton("CETAK STRUK",(d,w)->print(receipt)).setNegativeButton("SELESAI",(d,w)->showHome()).show();}
+            void print(String data){if(Build.VERSION.SDK_INT>=31&&checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},5);toast("Izinkan Bluetooth lalu tekan cetak lagi.");return;}
+              if(bluetooth==null||!bluetooth.isEnabled()){toast("Aktifkan Bluetooth dan pairing printer.");return;}
+              new Thread(()->{try{BluetoothDevice device=bluetooth.getRemoteDevice(MAC);if(socket==null||!socket.isConnected()){socket=device.createRfcommSocketToServiceRecord(SPP);socket.connect();}OutputStream out=socket.getOutputStream();out.write(new byte[]{0x1B,0x40});out.write(data.getBytes(Charset.forName("IBM850")));out.write(new byte[]{0x1B,0x64,0x03});out.flush();runOnUiThread(()->toast("Struk terkirim ke Rongta."));}catch(Exception e){try{if(socket!=null)socket.close();}catch(Exception ignored){}socket=null;runOnUiThread(()->toast("Cetak gagal: "+e.getMessage()));}}).start();}
+            void showHistory(){base("Riwayat Transaksi");try{JSONArray a=new JSONArray(db.getString("sales","[]"));for(int i=a.length()-1;i>=0;i--){JSONObject o=a.getJSONObject(i);LinearLayout c=column();pad(c,12);c.setBackground(bg(Color.WHITE,12));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(dp(14),dp(8),dp(14),dp(4));root.addView(c,p);c.addView(text("Rp "+money(o.optInt("total"))+" • "+o.optString("payment"),16,BROWN,true));c.addView(text(new Date(o.optLong("date")).toString(),11,INK,false));c.addView(text("Status sinkronisasi: "+o.optString("sync"),12,0xFF68735B,false));}}catch(Exception ignored){}Button b=btn("KEMBALI");root.addView(b);b.setOnClickListener(v->showHome());}
+            void showSync(){base("Sinkronisasi");LinearLayout c=column();pad(c,18);root.addView(c);c.addView(text("Mode offline-first aktif",18,BROWN,true));c.addView(text("Transaksi disimpan di perangkat dan diberi status PENDING. Backend belum dikonfigurasi; sinkronisasi otomatis akan diaktifkan setelah endpoint server tersedia.",14,INK,false));Button b=btn("KEMBALI");c.addView(b);b.setOnClickListener(v->showHome());}
+            int todayCount(){try{JSONArray a=new JSONArray(db.getString("sales","[]"));int n=0;for(int i=0;i<a.length();i++)if(sameDay(a.getJSONObject(i).optLong("date")))n++;return n;}catch(Exception e){return 0;}}
+            int todayRevenue(){try{JSONArray a=new JSONArray(db.getString("sales","[]"));int n=0;for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);if(sameDay(o.optLong("date")))n+=o.optInt("total");}return n;}catch(Exception e){return 0;}}
+            boolean sameDay(long t){return new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date(t)).equals(new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date()));}
+            void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
+          }
+          EOF
+      - name: Build APK
+        run: gradle assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: POS-MieAyam-Android-v3.0
+          path: app/build/outputs/apk/debug/*.apk
