@@ -195,7 +195,7 @@ jobs:
             WebView web;
             AppDatabase database;
             BluetoothAdapter adapter;
-            BluetoothSocket socket;
+            final java.util.concurrent.atomic.AtomicBoolean printing=new java.util.concurrent.atomic.AtomicBoolean(false);
             final String MAC="86:67:7A:CF:48:AE";
             final UUID SPP=UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
             public void onCreate(Bundle b){super.onCreate(b);database=Room.databaseBuilder(getApplicationContext(),AppDatabase.class,"pakdesurya-pos.db").allowMainThreadQueries().build();getWindow().setStatusBarColor(0xFF38251C);getWindow().setNavigationBarColor(0xFF38251C);adapter=BluetoothAdapter.getDefaultAdapter();web=new WebView(this);web.setBackgroundColor(0xFFFFF8ED);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.addJavascriptInterface(new Bridge(),"Android");setContentView(web);web.loadUrl("file:///android_asset/index.html");}
@@ -207,9 +207,47 @@ jobs:
               @JavascriptInterface public String appVersion(){return "3.2-preview";}
             }
             void print(String data){
-              if(Build.VERSION.SDK_INT>=31&&checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"},5);Toast.makeText(this,"Izinkan Bluetooth lalu coba cetak lagi.",Toast.LENGTH_LONG).show();return;}
-              if(adapter==null||!adapter.isEnabled()){Toast.makeText(this,"Aktifkan Bluetooth dan pairing printer.",Toast.LENGTH_LONG).show();return;}
-              new Thread(()->{try{BluetoothDevice d=adapter.getRemoteDevice(MAC);if(socket==null||!socket.isConnected()){socket=d.createRfcommSocketToServiceRecord(SPP);socket.connect();}OutputStream out=socket.getOutputStream();out.write(new byte[]{0x1B,0x40});out.write(data.getBytes("IBM850"));out.write(new byte[]{0x1B,0x64,0x03});out.flush();runOnUiThread(()->Toast.makeText(this,"Struk terkirim ke Rongta.",Toast.LENGTH_LONG).show());}catch(Exception e){try{if(socket!=null)socket.close();}catch(Exception ignored){}socket=null;runOnUiThread(()->Toast.makeText(this,"Cetak gagal: "+e.getMessage(),Toast.LENGTH_LONG).show());}}).start();
+              if(Build.VERSION.SDK_INT>=31&&checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"},5);Toast.makeText(this,"Izinkan akses perangkat Bluetooth, lalu tekan Cetak Ulang.",Toast.LENGTH_LONG).show();return;}
+              if(adapter==null||!adapter.isEnabled()){Toast.makeText(this,"Aktifkan Bluetooth dan pastikan Rongta sudah pairing.",Toast.LENGTH_LONG).show();return;}
+              if(!printing.compareAndSet(false,true)){Toast.makeText(this,"Printer sedang memproses cetakan.",Toast.LENGTH_SHORT).show();return;}
+              new Thread(()->{
+                String error="Koneksi printer gagal";
+                BluetoothSocket current=null;
+                try{
+                  BluetoothDevice device=adapter.getRemoteDevice(MAC);
+                  try{adapter.cancelDiscovery();}catch(Exception ignored){}
+                  Exception first=null;
+                  try{
+                    current=device.createRfcommSocketToServiceRecord(SPP);
+                    current.connect();
+                  }catch(Exception e){
+                    first=e;
+                    try{if(current!=null)current.close();}catch(Exception ignored){}
+                    current=null;
+                    try{
+                      current=device.createInsecureRfcommSocketToServiceRecord(SPP);
+                      current.connect();
+                    }catch(Exception fallback){
+                      if(first!=null)fallback.addSuppressed(first);
+                      throw fallback;
+                    }
+                  }
+                  OutputStream out=current.getOutputStream();
+                  out.write(new byte[]{0x1B,0x40});
+                  out.write(data.getBytes("IBM850"));
+                  out.write(new byte[]{0x1B,0x64,0x03});
+                  out.flush();
+                  try{Thread.sleep(350);}catch(InterruptedException ignored){Thread.currentThread().interrupt();}
+                  runOnUiThread(()->Toast.makeText(this,"Struk berhasil dikirim ke Rongta.",Toast.LENGTH_LONG).show());
+                }catch(Exception e){
+                  error=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();
+                  final String message=error;
+                  runOnUiThread(()->Toast.makeText(this,"Cetak gagal: "+message+". Cek printer, lalu pilih Cetak Ulang.",Toast.LENGTH_LONG).show());
+                }finally{
+                  try{if(current!=null)current.close();}catch(Exception ignored){}
+                  printing.set(false);
+                }
+              }).start();
             }
             public void onBackPressed(){if(web!=null)web.evaluateJavascript("backToDashboard()",null);else super.onBackPressed();}
           }
@@ -219,5 +257,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: POS-MieAyam-Android-v3.1
+          name: POS-MieAyam-Android-v3.2
           path: app/build/outputs/apk/debug/*.apk
