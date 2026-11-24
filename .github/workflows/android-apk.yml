@@ -65,6 +65,7 @@ jobs:
           import android.content.*;
           import android.graphics.Typeface;
           import android.graphics.Color;
+          import android.graphics.drawable.GradientDrawable;
           import android.view.*;
           import android.widget.*;
           import org.json.*;
@@ -116,7 +117,7 @@ jobs:
             void product(LinearLayout body,String name,String desc,int id){LinearLayout card=column();pad(card,14);card.setBackground(bg(Color.WHITE,14));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,dp(10),0,dp(4));body.addView(card,p);card.addView(text(name,16,BROWN,true));card.addView(text(desc,13,INK,false));Button add=btn("+ TAMBAH");card.addView(add);add.setOnClickListener(v->{if(id==0)qtyAsin++;else qtyManis++;refreshCart();});}
             void refreshCart(){if(cartRows==null)return;cartRows.removeAllViews();if(qtyAsin>0)cartRows.addView(text("Jebew Asin × "+qtyAsin+"  Rp "+(qtyAsin*10000),14,INK,false));if(qtyManis>0)cartRows.addView(text("Jebew Manis × "+qtyManis+"  Rp "+(qtyManis*10000),14,INK,false));cartTotal.setText("Total: Rp "+money(total()));}
             int total(){return (qtyAsin+qtyManis)*10000;}
-            String money(int n){return String.format(Locale.US("%,d",n).replace(',','.'));}
+            String money(int n){return String.format(Locale.US,"%,d",n).replace(',','.');}
             void checkout(){if(total()==0){new AlertDialog.Builder(this).setMessage("Keranjang masih kosong").setPositiveButton("OK",null).show();return;}
               String[] methods={"Tunai","QRIS","Transfer"};new AlertDialog.Builder(this).setTitle("Pilih pembayaran").setItems(methods,(d,w)->saveSale(methods[w]));}
             void saveSale(String method){try{JSONArray a=new JSONArray(db.getString("sales","[]"));JSONObject o=new JSONObject();String id=UUID.randomUUID().toString();o.put("id",id);o.put("date",System.currentTimeMillis());o.put("asin",qtyAsin);o.put("manis",qtyManis);o.put("total",total());o.put("payment",method);o.put("sync","PENDING");a.put(o);db.edit().putString("sales",a.toString()).apply();String receipt=receipt(o);qtyAsin=0;qtyManis=0;showSuccess(receipt);}catch(Exception e){toast("Gagal menyimpan transaksi");}}
