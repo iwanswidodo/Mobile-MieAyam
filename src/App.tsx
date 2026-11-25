@@ -130,7 +130,7 @@ export default function App() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.appHeader}>
-        <Image source={require('../assets/pak-de-surya-logo.jpg')} style={styles.brandLogo} resizeMode="contain" />
+        <Image source={require('../assets/pak-de-surya-logo.png')} style={styles.brandLogo} resizeMode="contain" />
         <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>POS</Text></View>
       </View>
 
