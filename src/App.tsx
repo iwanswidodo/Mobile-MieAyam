@@ -130,7 +130,14 @@ export default function App() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.appHeader}>
-        <Image source={require('../assets/pak-de-surya-logo.png')} style={styles.brandLogo} resizeMode="contain" />
+        <View style={styles.brandLockup}>
+          <Image source={require('../assets/pak-de-surya-logo.png')} style={styles.brandLogo} resizeMode="contain" />
+          <View style={styles.brandTextWrap}>
+            <Text style={styles.brandTitle}>MIE AYAM</Text>
+            <Text style={styles.brandName}>PAK DE SURYA</Text>
+            <Text style={styles.brandTagline}>LEZAT • HALAL • BERKAH</Text>
+          </View>
+        </View>
         <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>POS</Text></View>
       </View>
 
@@ -161,7 +168,12 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: colors.background},
   appHeader: {height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.line},
-  brandLogo: {width: 168, height: 62},
+  brandLockup: {flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0},
+  brandLogo: {width: 58, height: 58},
+  brandTextWrap: {marginLeft: 9, flexShrink: 1},
+  brandTitle: {fontSize: 9, fontWeight: '800', letterSpacing: 1.8, color: colors.brownSoft},
+  brandName: {fontSize: 16, fontWeight: '900', letterSpacing: 0.1, color: '#6A2417'},
+  brandTagline: {fontSize: 8, fontWeight: '700', letterSpacing: 0.45, color: colors.brownSoft, marginTop: 2},
   headerSubtitle: {fontSize: 11, color: colors.muted, marginTop: 2, letterSpacing: 0.5},
   headerBadge: {width: 38, height: 38, borderRadius: 13, backgroundColor: colors.brown, alignItems: 'center', justifyContent: 'center'},
   headerBadgeText: {fontSize: 12, fontWeight: '800', color: '#FFFFFF'},
