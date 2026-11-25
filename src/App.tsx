@@ -111,6 +111,9 @@ function HomeScreen({navigate, transactions}: {navigate: (tab: Tab) => void; tra
 
 function CashierScreen({
   catalog,
+  apiBaseUrl,
+  onRefreshCatalog,
+  loadingCatalog,
   cart,
   onAdd,
   onIncrease,
@@ -119,6 +122,9 @@ function CashierScreen({
   onCheckout,
 }: {
   catalog: Product[];
+  apiBaseUrl: string;
+  onRefreshCatalog: () => void;
+  loadingCatalog: boolean;
   cart: CartItem[];
   onAdd: (product: Product) => void;
   onIncrease: (productId: string) => void;
@@ -134,19 +140,20 @@ function CashierScreen({
       <Text style={styles.greeting}>Kasir</Text>
       <Text style={styles.dateText}>Pilih produk untuk membuat pesanan</Text>
       <View style={styles.catalogCard}>
-        <SectionTitle title="Katalog produk" />
+        <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}><SectionTitle title="Katalog produk" /><TouchableOpacity onPress={onRefreshCatalog}><Text style={styles.sectionAction}>{loadingCatalog?"Memuat...":"↻ Refresh"}</Text></TouchableOpacity></View>
         {catalog.length === 0 ? (
           <View style={styles.emptyCatalog}>
             <Text style={styles.emptyIcon}>▦</Text>
             <Text style={styles.emptyTitle}>Belum ada produk</Text>
-            <Text style={styles.emptyText}>Produk akan muncul di sini setelah katalog dari aplikasi web terhubung ke API. Tambahkan produk melalui web, bukan dengan data contoh di aplikasi kasir.</Text>
+            <Text style={styles.emptyText}>{loadingCatalog?"Mengambil produk dari server...":"Belum ada produk. Periksa alamat server di Pengaturan."}</Text>
           </View>
         ) : (
           catalog.filter(product => product.available).map(product => (
             <TouchableOpacity key={product.id} style={styles.productRow} onPress={() => onAdd(product)}>
+              {product.imageUrl ? <Image source={{uri:product.imageUrl}} style={{width:50,height:50,borderRadius:9,marginRight:10}} /> : null}
               <View style={styles.productInfo}>
                 <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productPrice}>{formatRupiah(product.price)}</Text>
+                <Text style={styles.productPrice}>{product.category ? product.category+" · " : ""}{formatRupiah(product.price)}</Text>
               </View>
               <Text style={styles.addButton}>＋</Text>
             </TouchableOpacity>
@@ -265,8 +272,7 @@ function SettingsScreen({apiBaseUrl,onSave,connectionMessage}:{apiBaseUrl:string
    <Text style={styles.inputLabel}>URL API</Text>
    <TextInput value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="http://192.168.1.10:8080" placeholderTextColor="#A99B90" style={styles.moneyInput}/>
    <Text style={styles.offlineNote}>Masukkan IP/domain server yang dapat diakses HP. Jangan gunakan localhost pada HP fisik.</Text>
-   <TouchableOpacity style={styles.primaryButton} onPress={()=>onSave(url)}><Text style={styles.primaryButtonText}>Simpan alamat server</Text></TouchableOpacity>
-   <TouchableOpacity style={styles.primaryButton} onPress={()=>onSave(url).then(()=>setTimeout(()=>{},0))}><Text style={styles.primaryButtonText}>Simpan & hubungkan</Text></TouchableOpacity>
+   <TouchableOpacity style={styles.primaryButton} onPress={()=>onSave(url)}><Text style={styles.primaryButtonText}>Simpan & hubungkan</Text></TouchableOpacity>
    <Text style={styles.offlineNote}>{connectionMessage}</Text>
   </View>
  </ScrollView>;
@@ -397,7 +403,7 @@ export default function App() {
           ) : activeTab === 'home' ? (
             <HomeScreen navigate={setActiveTab} transactions={transactions} />
           ) : activeTab === 'cashier' ? (
-            <CashierScreen catalog={catalog} cart={cart} onAdd={addProduct} onIncrease={id => changeQuantity(id, 1)} onDecrease={id => changeQuantity(id, -1)} onRemove={id => setCart(current => current.filter(item => item.productId !== id))} onCheckout={() => setPaymentOpen(true)} />
+            <CashierScreen catalog={catalog} apiBaseUrl={apiBaseUrl} onRefreshCatalog={refreshCatalog} loadingCatalog={loadingCatalog} cart={cart} onAdd={addProduct} onIncrease={id => changeQuantity(id, 1)} onDecrease={id => changeQuantity(id, -1)} onRemove={id => setCart(current => current.filter(item => item.productId !== id))} onCheckout={() => setPaymentOpen(true)} />
           ) : activeTab === 'history' ? (
             <HistoryScreen transactions={transactions} />
           ) : <SettingsScreen apiBaseUrl={apiBaseUrl} onSave={saveApiUrl} connectionMessage={connectionMessage} />}

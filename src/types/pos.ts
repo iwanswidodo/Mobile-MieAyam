@@ -6,6 +6,7 @@ export type Product = {
   price: number;
   category?: string;
   available: boolean;
+  imageUrl?: string;
 };
 
 export type CartItem = {
