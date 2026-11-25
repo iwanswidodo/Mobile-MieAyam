@@ -133,7 +133,6 @@ export default function App() {
         <Image source={require('../assets/pak-de-surya-logo.jpg')} style={styles.brandLogo} resizeMode="contain" />
         <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>POS</Text></View>
       </View>
-      </View>
 
       <View style={styles.screen}>
         {activeTab === 'home'
