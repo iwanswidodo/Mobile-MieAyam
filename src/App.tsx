@@ -129,9 +129,16 @@ export default function App() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.appHeader}>
-        <View>
-          <Text style={styles.headerBrand}>Pak De Surya</Text>
-          <Text style={styles.headerSubtitle}>Point of Sale</Text>
+        <View style={styles.brandLockup}>
+          <View style={styles.brandMark}>
+            <Text style={styles.brandSun}>☀</Text>
+            <Text style={styles.brandBowl}>🍜</Text>
+          </View>
+          <View>
+            <Text style={styles.headerBrand}>MIE AYAM</Text>
+            <Text style={styles.brandName}>PAK DE SURYA</Text>
+            <Text style={styles.headerSubtitle}>LEZAT • HALAL • BERKAH</Text>
+          </View>
         </View>
         <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>POS</Text></View>
       </View>
@@ -163,7 +170,12 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: colors.background},
   appHeader: {height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.line},
-  headerBrand: {fontSize: 17, fontWeight: '800', color: colors.brown},
+  brandLockup: {flexDirection: 'row', alignItems: 'center', gap: 9},
+  brandMark: {width: 42, height: 48, alignItems: 'center', justifyContent: 'center'},
+  brandSun: {fontSize: 25, lineHeight: 27, color: '#C78B36'},
+  brandBowl: {fontSize: 19, marginTop: -5},
+  headerBrand: {fontSize: 8, fontWeight: '800', letterSpacing: 2.2, color: colors.brownSoft},
+  brandName: {fontSize: 17, fontWeight: '900', letterSpacing: -0.4, color: '#6A2417', marginTop: 1},
   headerSubtitle: {fontSize: 11, color: colors.muted, marginTop: 2, letterSpacing: 0.5},
   headerBadge: {width: 38, height: 38, borderRadius: 13, backgroundColor: colors.brown, alignItems: 'center', justifyContent: 'center'},
   headerBadgeText: {fontSize: 12, fontWeight: '800', color: '#FFFFFF'},
