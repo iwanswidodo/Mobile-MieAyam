@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -125,7 +125,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.appHeader}>
         <View>
@@ -154,7 +155,8 @@ export default function App() {
           );
         })}
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
