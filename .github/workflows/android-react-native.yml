@@ -48,14 +48,14 @@ jobs:
       - name: Diagnose React Native autolinking
         run: npx react-native config
 
-      - name: Build debug APK
+      - name: Build installable release APK (includes JS bundle)
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mobile-MieAyam-ReactNative-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Mobile-MieAyam-ReactNative-release-test
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
