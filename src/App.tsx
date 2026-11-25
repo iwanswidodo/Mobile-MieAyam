@@ -1,4 +1,5 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Image,
@@ -17,6 +18,8 @@ import {getTransactions, saveTransaction} from './storage/transactionStorage';
 import {calculateChange, formatRupiah} from './utils/money';
 
 type Tab = 'home' | 'cashier' | 'history' | 'settings';
+type ApiProduct = {id:number;name:string;category:string;variant?:string;price:number;imageUrl?:string;active:boolean};
+const API_URL_KEY='@pak-de-surya/api-url/v1';
 
 const colors = {
   background: '#F7F1E8',
@@ -252,6 +255,22 @@ function HistoryScreen({transactions}: {transactions: Transaction[]}) {
   );
 }
 
+function SettingsScreen({apiBaseUrl,onSave,connectionMessage}:{apiBaseUrl:string;onSave:(url:string)=>Promise<void>;connectionMessage:string}) {
+ const [url,setUrl]=useState(apiBaseUrl);
+ useEffect(()=>setUrl(apiBaseUrl),[apiBaseUrl]);
+ return <ScrollView contentContainerStyle={styles.content}>
+  <Text style={styles.greeting}>Pengaturan Koneksi</Text>
+  <Text style={styles.dateText}>Alamat server backend</Text>
+  <View style={styles.paymentCard}>
+   <Text style={styles.inputLabel}>URL API</Text>
+   <TextInput value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="http://192.168.1.10:8080" placeholderTextColor="#A99B90" style={styles.moneyInput}/>
+   <Text style={styles.offlineNote}>Masukkan IP/domain server yang dapat diakses HP. Jangan gunakan localhost pada HP fisik.</Text>
+   <TouchableOpacity style={styles.primaryButton} onPress={()=>onSave(url)}><Text style={styles.primaryButtonText}>Simpan alamat server</Text></TouchableOpacity>
+   <TouchableOpacity style={styles.primaryButton} onPress={()=>onSave(url).then(()=>setTimeout(()=>{},0))}><Text style={styles.primaryButtonText}>Simpan & hubungkan</Text></TouchableOpacity>
+   <Text style={styles.offlineNote}>{connectionMessage}</Text>
+  </View>
+ </ScrollView>;
+}
 function PlaceholderScreen() {
   return (
     <View style={styles.placeholder}>
@@ -272,16 +291,45 @@ const tabs: {key: Tab; label: string; symbol: string}[] = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [catalog] = useState<Product[]>(initialCatalog);
+  const [catalog,setCatalog] = useState<Product[]>(initialCatalog);
+  const [apiBaseUrl,setApiBaseUrl] = useState('');
+  const [loadingCatalog,setLoadingCatalog] = useState(false);
+  const [connectionMessage,setConnectionMessage] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   useEffect(() => {
+    AsyncStorage.getItem(API_URL_KEY).then(value => {if(value)setApiBaseUrl(value);}).catch(() => {});
     getTransactions().then(setTransactions).catch(() => {
       Alert.alert('Penyimpanan', 'Riwayat transaksi lokal belum dapat dibaca.');
     });
   }, []);
+
+
+  const refreshCatalog = useCallback(async () => {
+    if (!apiBaseUrl.trim()) {setConnectionMessage('Atur alamat server pada menu Pengaturan.');return;}
+    setLoadingCatalog(true);
+    try {
+      const response=await fetch(apiBaseUrl.replace(/\/$/,'')+'/api/products');
+      if(!response.ok) throw new Error('HTTP '+response.status);
+      const rows:ApiProduct[]=await response.json();
+      setCatalog(rows.filter(p=>p.active).map(p=>({
+        id:String(p.id),name:p.variant?p.name+' · '+p.variant:p.name,
+        price:p.price,category:p.category,available:p.active,
+        imageUrl:p.imageUrl?(p.imageUrl.startsWith('http')?p.imageUrl:apiBaseUrl.replace(/\/$/,'')+p.imageUrl):undefined,
+      })));
+      setConnectionMessage('Terhubung. '+rows.length+' produk diterima.');
+    } catch(e) {setConnectionMessage(e instanceof Error?e.message:'Gagal menghubungi server.');}
+    finally {setLoadingCatalog(false);}
+  },[apiBaseUrl]);
+  useEffect(()=>{if(apiBaseUrl)void refreshCatalog();},[apiBaseUrl,refreshCatalog]);
+  const saveApiUrl=async(url:string)=>{
+    const normalized=url.trim().replace(/\/$/,'');
+    await AsyncStorage.setItem(API_URL_KEY,normalized);
+    setApiBaseUrl(normalized);
+    setConnectionMessage('Alamat server disimpan.');
+  };
 
   const cartTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
@@ -352,7 +400,7 @@ export default function App() {
             <CashierScreen catalog={catalog} cart={cart} onAdd={addProduct} onIncrease={id => changeQuantity(id, 1)} onDecrease={id => changeQuantity(id, -1)} onRemove={id => setCart(current => current.filter(item => item.productId !== id))} onCheckout={() => setPaymentOpen(true)} />
           ) : activeTab === 'history' ? (
             <HistoryScreen transactions={transactions} />
-          ) : <PlaceholderScreen />}
+          ) : <SettingsScreen apiBaseUrl={apiBaseUrl} onSave={saveApiUrl} connectionMessage={connectionMessage} />}
         </View>
         {!paymentOpen ? (
           <View style={styles.bottomNav}>
